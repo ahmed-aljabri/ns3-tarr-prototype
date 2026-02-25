@@ -40,12 +40,6 @@ From ns-3 root:
 ./ns3 build
 ./ns3 run "tcp-bulk-send --tracing=true --ns3::TcpSocketBase::TarrEnabled=1 --ns3::TcpSocketBase::TarrAdvertisedCapability=1 --ns3::TcpSocketBase::TarrRequestRatio=4"
 ```
-
-Optional runtime logs:
-
-```bash
-NS_LOG="TcpSocketBase=level_info|prefix_time:TcpOptionTARR=level_info|prefix_time" \
-./ns3 run "tcp-bulk-send --tracing=true --ns3::TcpSocketBase::TarrEnabled=1 --ns3::TcpSocketBase::TarrAdvertisedCapability=1 --ns3::TcpSocketBase::TarrRequestRatio=4"
 ```
 
 
