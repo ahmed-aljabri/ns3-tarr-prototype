@@ -50,11 +50,10 @@ NS_LOG="TcpSocketBase=level_info|prefix_time:TcpOptionTARR=level_info|prefix_tim
 
 
 ## Remaining work
-
-**25/02/2026**
 - Add/validate policy bounds using cwnd/rwnd constraints from draft guidance.
 - Improve request policy (avoid unnecessary repeated request emission).
+- Discourage advertising tarr capability on last ACK of 3WH 
 - Add retransmission-specific policy handling for TARR requests.
-- Add dedicated trace sources for TARR runtime state (`peer capability`, applied `R`, counters).
+- [Optional] Add dedicated trace sources for TARR runtime state.
 - Expand tests for corner cases and draft conformance behavior.
 
