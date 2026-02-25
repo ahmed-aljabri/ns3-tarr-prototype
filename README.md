@@ -1,9 +1,9 @@
 # ns3-tarr-prototype
 
-Prototype implementation of TCP ACK Rate Request (TARR) in the ns-3 TCP stack.
+ Implementation of TCP ACK Rate Request (TARR) on the existing ns-3 TCP stack.
 
 Reference draft:
-- `draft-ietf-tcpm-ack-rate-request`
+- [draft-ietf-tcpm-ack-rate-request-10](https://datatracker.ietf.org/doc/draft-ietf-tcpm-ack-rate-request/)
 
 ## What is implemented
 
@@ -23,7 +23,7 @@ Reference draft:
   - Applied peer ratio state updates
 - Delayed-ACK path integration using peer-requested ratio.
 
-## Files touched
+## ns-3 files modified
 
 - `src/internet/model/tcp-option-tarr.h`
 - `src/internet/model/tcp-option-tarr.cc`
@@ -31,8 +31,6 @@ Reference draft:
 - `src/internet/model/tcp-option.cc`
 - `src/internet/model/tcp-socket-base.h`
 - `src/internet/model/tcp-socket-base.cc`
-- `src/internet/CMakeLists.txt`
-- `TARR_NOTES.md`
 
 ## How to build and run
 
@@ -53,6 +51,7 @@ NS_LOG="TcpSocketBase=level_info|prefix_time:TcpOptionTARR=level_info|prefix_tim
 
 ## Remaining work
 
+**25/02/2026**
 - Add/validate policy bounds using cwnd/rwnd constraints from draft guidance.
 - Improve request policy (avoid unnecessary repeated request emission).
 - Add retransmission-specific policy handling for TARR requests.
