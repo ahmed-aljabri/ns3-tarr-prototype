@@ -1,0 +1,20 @@
+# Build/output
+build/
+cmake-cache/
+testpy-output/
+pcaps/
+*.pcap
+*.tr
+*.o
+*.so
+*.dylib
+
+# Python/cache
+__pycache__/
+*.pyc
+
+# macOS/editor
+.DS_Store
+.vscode/
+.lock-ns3_*
+
