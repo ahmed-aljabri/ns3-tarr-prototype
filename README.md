@@ -40,7 +40,7 @@ From ns-3 root:
 ./ns3 build
 ./ns3 run "tcp-bulk-send --tracing=true --ns3::TcpSocketBase::TarrEnabled=1 --ns3::TcpSocketBase::TarrAdvertisedCapability=1 --ns3::TcpSocketBase::TarrRequestRatio=4"
 ```
-```
+
 
 
 ## Remaining work
