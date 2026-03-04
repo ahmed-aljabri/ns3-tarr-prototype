@@ -34,20 +34,34 @@ Reference draft:
 
 ## How to build and run
 
-From ns-3 root:
+## Installing into ns-3
 
-```bash
-./ns3 build
-./ns3 run "tcp-bulk-send --tracing=true --ns3::TcpSocketBase::TarrEnabled=1 --ns3::TcpSocketBase::TarrAdvertisedCapability=1 --ns3::TcpSocketBase::TarrRequestRatio=4"
-```
+This prototype is built against **ns-3.46.1**. Other versions may work but are untested.
 
+### Steps
+
+1. Copy the new files into your ns-3 internet model directory:
+   - `src/internet/model/tcp-option-tarr.h`
+   - `src/internet/model/tcp-option-tarr.cc`
+
+2. Replace the following stock ns-3 files with the modified versions from this repo:
+   - `src/internet/model/tcp-option.h`
+   - `src/internet/model/tcp-option.cc`
+   - `src/internet/model/tcp-socket-base.h`
+   - `src/internet/model/tcp-socket-base.cc`
+
+   > **Note:** These files replace the originals. If you have local changes to them, merge carefully.
+
+3. Rebuild ns-3 from the root directory:
+   ```bash
+    ./ns3 build
+    ./ns3 run "tcp-bulk-send --tracing=true --ns3::TcpSocketBase::TarrEnabled=1 --ns3::TcpSocketBase::TarrAdvertisedCapability=1 --ns3::TcpSocketBase::TarrRequestRatio=4"
 
 
 ## Remaining work
 - Add/validate policy bounds using cwnd/rwnd constraints from draft guidance.
-- Improve request policy (avoid unnecessary repeated request emission).
-- Discourage advertising tarr capability on last ACK of 3WH 
+- Discourage advertising tarr capability on last ACK of 3WH
 - Add retransmission-specific policy handling for TARR requests.
 - [Optional] Add dedicated trace sources for TARR runtime state.
 - Expand tests for corner cases and draft conformance behavior.
-
+- Add `TCP_ACK_RATE_REQ_PROCESS` attribute to provide receiver side control to enable/disable TARR processing.
