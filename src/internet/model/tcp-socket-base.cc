@@ -1647,10 +1647,10 @@ TcpSocketBase::IsTcpOptionEnabled(uint8_t kind) const
     case TcpOption::SACKPERMITTED:
     case TcpOption::SACK:
         return m_sackEnabled;
-    
-    /** 
-     * TARR CASE 
-     * 
+
+    /**
+     * TARR CASE
+     *
      * */
     case TcpOption::TARR:
         return m_tarrEnabled;
@@ -1673,7 +1673,7 @@ TcpSocketBase::ReadOptions(const TcpHeader& tcpHeader, uint32_t* bytesSacked)
         case TcpOption::SACK:
             *bytesSacked = ProcessOptionSack(option);
             break;
-        
+
         /**
          * TARR CASE
          */
@@ -4582,12 +4582,12 @@ TcpSocketBase::ProcessOptionTimestamp(const Ptr<const TcpOption> option,
 }
 
 
-/** 
- * 
- * @brief Processing TARR Option   
- * 
+/**
  *
- * 
+ * @brief Processing TARR Option
+ *
+ *
+ *
  * */
 void
 TcpSocketBase::ProcessOptionTarr(const Ptr<const TcpOption> option)
@@ -4609,7 +4609,7 @@ TcpSocketBase::ProcessOptionTarr(const Ptr<const TcpOption> option)
 
     if(tarr->IsRequest())
     {
-        uint8_t r = tarr->GetR(); // fetch bounded R value 
+        uint8_t r = tarr->GetR(); // fetch bounded R value
         NS_LOG_INFO("Recv TARR request R=" << unsigned(r) << " V=" << tarr->GetV());
 
         if (r == 0) // handle immediate ACK case
@@ -4645,8 +4645,10 @@ TcpSocketBase::AddOptionTimestamp(TcpHeader& header)
                                 << " echo=" << m_timestampToEcho);
 }
 
-/** Implementation for TARR Add Option function */
-
+/**
+ * @brief Checks whether to add the TARR option to the outgoing packet, if last R sent is equal to what sender the currently requested it will not append the option
+ *
+ * */
 void
 TcpSocketBase::AddOptionTARR(TcpHeader& header)
 {
@@ -4667,18 +4669,19 @@ TcpSocketBase::AddOptionTARR(TcpHeader& header)
     {
         opt->SetCapabilityAnnouncement();   // Len=4
         NS_LOG_INFO("Send TARR capability");
+        header.AppendOption(opt);
+
     }
-    else
+    else if (m_requestedAckRatio != m_lastSentR)
     {
         uint8_t r = std::min<uint8_t>(m_requestedAckRatio, 127);
+        m_lastSentR = r;
         opt->SetRequest(r, false);          // Len=5
         NS_LOG_INFO("Send TARR request R=" << unsigned(r));
+        header.AppendOption(opt);
     }
 
-    header.AppendOption(opt);
 }
-
-
 
 void
 TcpSocketBase::UpdateWindowSize(const TcpHeader& header)
