@@ -7,6 +7,7 @@
  * Author: Adrian Sai-wah Tam <adrian.sw.tam@gmail.com>
  */
 
+#include <cstdint>
 #define NS_LOG_APPEND_CONTEXT                                                                      \
     if (m_node)                                                                                    \
     {                                                                                              \
@@ -4681,9 +4682,11 @@ TcpSocketBase::AddOptionTARR(TcpHeader& header)
     }
     else if (m_peerTarrCapable && (m_requestedAckRatio != m_lastSentR))
     {
-        uint8_t r = std::min<uint8_t>(m_requestedAckRatio, 127);
-        m_lastSentR = r;
+        // bound r under cwnd
+        uint8_t rMax = std::min((uint32_t)m_tcb->m_cWnd, (uint32_t)m_rWnd) / GetSegSize();
+        uint8_t r = std::min<uint8_t>(m_requestedAckRatio, rMax);
         opt->SetRequest(r, false);          // Len=5
+        m_lastSentR = m_requestedAckRatio;
         NS_LOG_INFO("Send TARR request R=" << unsigned(r));
         header.AppendOption(opt);
     }
