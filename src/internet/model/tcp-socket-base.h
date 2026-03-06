@@ -1425,15 +1425,16 @@ class TcpSocketBase : public TcpSocket
     uint32_t m_timestampToEcho{0};  //!< Timestamp to echo
 
     // TARR Attributes
-    bool m_tarrEnabled{true};                //<! RFC DRAFT TARR option enabled
-    bool m_localTarrCapable{false};          //<! Advertised TARR local capability
+    bool m_tarrEnabled{true};                //!< RFC DRAFT TARR option enabled
+    bool m_localTarrCapable{false};          //!< Advertised TARR local capability
     bool m_peerTarrCapable{false};           //!< Peer advertised TARR capability
+    bool m_capabilitySent{false};            //!< Flag tracking if we have already advertised support
     uint8_t m_requestedAckRatio{2};          //!< Last R value we asked for
-    uint8_t m_lastSentR{128};                //<! Last R we sent -- 128 used for first check to fail and hence send R always
+    uint8_t m_lastSentR{128};                //!< Last R we sent -- 128 used for first check to fail and hence send R always
     uint8_t m_peerAckRatio{2};               //!< Current R in force for us to honor from peer (fallback = normal delayed ACK per 2 segs)
     uint8_t m_segCountForAck{0};             //!< Count for received full-size segments since last ACK
-    bool m_tarrRequestOnData{true};          //<! Option to include in data packets
-    // uint8_t m_tarrMaxRequestRatio{16};    //<!Could be added later for more control over R (validation)
+    bool m_tarrRequestOnData{true};          //!< Option to include in data packets
+    // uint8_t m_tarrMaxRequestRatio{16};    //!< Could be added later for more control over R (validation)
 
 
 

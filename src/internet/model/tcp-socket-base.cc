@@ -1416,6 +1416,12 @@ TcpSocketBase::DoForwardUp(Ptr<Packet> packet, const Address& fromAddress, const
             m_winScalingEnabled = false;
         }
 
+        // Handle TARR on SYN, SYN-ACK
+        if (tcpHeader.HasOption(TcpOption::TARR) && m_tarrEnabled)
+        {
+            ProcessOptionTarr(tcpHeader.GetOption(TcpOption::TARR));
+        }
+
         if (tcpHeader.HasOption(TcpOption::SACKPERMITTED) && m_sackEnabled)
         {
             ProcessOptionSackPermitted(tcpHeader.GetOption(TcpOption::SACKPERMITTED));
@@ -4665,14 +4671,15 @@ TcpSocketBase::AddOptionTARR(TcpHeader& header)
 
     Ptr<TcpOptionTARR> opt = CreateObject<TcpOptionTARR>();
 
-    if (!m_peerTarrCapable && m_localTarrCapable)
+    if (m_localTarrCapable && (!m_capabilitySent || (header.GetFlags() & TcpHeader::SYN)))
     {
         opt->SetCapabilityAnnouncement();   // Len=4
         NS_LOG_INFO("Send TARR capability");
         header.AppendOption(opt);
+        m_capabilitySent = true;
 
     }
-    else if (m_requestedAckRatio != m_lastSentR)
+    else if (m_peerTarrCapable && (m_requestedAckRatio != m_lastSentR))
     {
         uint8_t r = std::min<uint8_t>(m_requestedAckRatio, 127);
         m_lastSentR = r;
