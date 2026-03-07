@@ -3,7 +3,7 @@
  Implementation of TCP ACK Rate Request (TARR) on the existing ns-3 TCP stack.
 
 Reference draft:
-- [draft-ietf-tcpm-ack-rate-request-10](https://datatracker.ietf.org/doc/draft-ietf-tcpm-ack-rate-request/)
+- [draft-ietf-tcpm-ack-rate-request-11](https://datatracker.ietf.org/doc/draft-ietf-tcpm-ack-rate-request/11/)
 
 ## What is implemented
 
@@ -17,11 +17,13 @@ Reference draft:
   - `TarrRequestRatio` (`0..127`)
   - `TarrAdvertisedCapability`
   - `TarrRequestOnData`
-- Send/receive integration in `TcpSocketBase`:
+- Sender/receiver behavior integration in `TcpSocketBase`:
   - Capability and request option insertion
   - Incoming TARR processing and peer capability tracking
   - Applied peer ratio state updates
-- Delayed-ACK path integration using peer-requested ratio.
+  - Add/validate policy bounds using cwnd/rwnd constraints from draft guidance.
+  - Discourage advertising tarr capability on last ACK of 3WH
+  - Add retransmission-specific policy handling for TARR requests.
 
 ## ns-3 files modified
 
@@ -52,16 +54,13 @@ This prototype is built against **ns-3.46.1**. Other versions may work but are u
 
    > **Note:** These files replace the originals. If you have local changes to them, merge carefully.
 
-3. Rebuild ns-3 from the root directory:
+3. Rebuild ns-3 from the root directory and run a basic bulk-send example (R=4):
    ```bash
     ./ns3 build
     ./ns3 run "tcp-bulk-send --tracing=true --ns3::TcpSocketBase::TarrEnabled=1 --ns3::TcpSocketBase::TarrAdvertisedCapability=1 --ns3::TcpSocketBase::TarrRequestRatio=4"
 
 
 ## Remaining work
-- Add/validate policy bounds using cwnd/rwnd constraints from draft guidance.
-- Discourage advertising tarr capability on last ACK of 3WH
-- Add retransmission-specific policy handling for TARR requests.
 - [Optional] Add dedicated trace sources for TARR runtime state.
 - Expand tests for corner cases and draft conformance behavior.
 - Add `TCP_ACK_RATE_REQ_PROCESS` attribute to provide receiver side control to enable/disable TARR processing.
