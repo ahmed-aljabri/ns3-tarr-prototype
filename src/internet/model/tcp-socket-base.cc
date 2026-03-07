@@ -4626,6 +4626,12 @@ TcpSocketBase::ProcessOptionTarr(const Ptr<const TcpOption> option)
     if(tarr->IsRequest())
     {
         uint8_t r = tarr->GetR(); // fetch bounded R value
+
+        // Ignore if R > rwin - as per draft
+        if ((uint8_t)r * GetSegSize() > m_advWnd) {
+            NS_LOG_INFO("Ignoring TARR request R=" << unsigned(r) << " exceeds rwin");
+            return;
+        }
         NS_LOG_INFO("Recv TARR request R=" << unsigned(r) << " V=" << tarr->GetV());
 
         if (r == 0) // handle immediate ACK case
