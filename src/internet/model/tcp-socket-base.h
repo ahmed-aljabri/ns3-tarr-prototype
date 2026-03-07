@@ -1429,6 +1429,8 @@ class TcpSocketBase : public TcpSocket
     bool m_localTarrCapable{false};          //!< Advertised TARR local capability
     bool m_peerTarrCapable{false};           //!< Peer advertised TARR capability
     bool m_capabilitySent{false};            //!< Flag tracking if we have already advertised support
+    bool m_tarrInRecovery{false};            //!< Flag tracking if we should adjust R in recovery mode
+    bool m_tarrPostRecovery{false};          //!< Flag to indicate to send R=2 post recovery mode (return to default)
     uint8_t m_requestedAckRatio{2};          //!< Last R value we asked for
     uint8_t m_lastSentR{128};                //!< Last R we sent -- 128 used for first check to fail and hence send R always
     uint8_t m_peerAckRatio{2};               //!< Current R in force for us to honor from peer (fallback = normal delayed ACK per 2 segs)

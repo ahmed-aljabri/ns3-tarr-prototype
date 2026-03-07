@@ -2277,6 +2277,11 @@ TcpSocketBase::ProcessAck(const SequenceNumber32& ackNumber,
 
                 m_congestionControl->CongestionStateSet(m_tcb, TcpSocketState::CA_OPEN);
                 m_tcb->m_congState = TcpSocketState::CA_OPEN;
+                if (m_tarrInRecovery){
+                    m_tarrInRecovery = false;
+                    m_tarrPostRecovery = true;
+                    m_lastSentR = 128; // force R=2 to be requested next segment
+                }
                 NS_LOG_DEBUG(segsAcked << " segments acked in CA_LOSS, ack of" << ackNumber
                                        << ", exiting CA_LOSS -> CA_OPEN");
             }
@@ -4068,6 +4073,10 @@ TcpSocketBase::ReTxTimeout()
     m_congestionControl->CwndEvent(m_tcb, TcpSocketState::CA_EVENT_LOSS);
     m_congestionControl->CongestionStateSet(m_tcb, TcpSocketState::CA_LOSS);
     m_tcb->m_congState = TcpSocketState::CA_LOSS;
+    if (m_peerTarrCapable && m_requestedAckRatio > 2) {
+        m_tarrInRecovery = true;
+        m_lastSentR = 128; // force R=1 to be requested on next segment
+    }
     m_tcb->m_cWnd = m_tcb->m_segmentSize;
     m_tcb->m_cWndInfl = m_tcb->m_cWnd;
 
@@ -4682,13 +4691,30 @@ TcpSocketBase::AddOptionTARR(TcpHeader& header)
     }
     else if (m_peerTarrCapable && (m_requestedAckRatio != m_lastSentR))
     {
-        // bound r under cwnd
-        uint8_t rMax = std::min((uint32_t)m_tcb->m_cWnd, (uint32_t)m_rWnd) / GetSegSize();
-        uint8_t r = std::min<uint8_t>(m_requestedAckRatio, rMax);
-        opt->SetRequest(r, false);          // Len=5
-        m_lastSentR = m_requestedAckRatio;
-        NS_LOG_INFO("Send TARR request R=" << unsigned(r));
+        // As per the TARR draft
+        // If in recovery mode -> set R = 1
+        // Post recovery mode -> set R = 2 (default delayed ACK)
+        //
+        // Check order matters to ensure we dont have both conditions true simultaneously
+        //
+
+        uint8_t r;
+        if (m_tarrPostRecovery) {
+            r = 2;
+            m_tarrPostRecovery = false;
+            NS_LOG_INFO("R Set to 2 post recovery");
+        } else if (m_tarrInRecovery) {
+            r = 1;
+            NS_LOG_INFO("R Set to 1 during recovery");
+        } else {
+            uint8_t rMax = std::min((uint32_t)m_tcb->m_cWnd, (uint32_t)m_rWnd) / GetSegSize();
+            r = std::min<uint8_t>(m_requestedAckRatio, rMax);
+        }
+
+        opt->SetRequest(r, false);
         header.AppendOption(opt);
+        NS_LOG_INFO("Send TARR request R=" << unsigned(r));
+        m_lastSentR = m_requestedAckRatio;
     }
 
 }
