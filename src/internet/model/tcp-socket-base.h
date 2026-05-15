@@ -584,6 +584,51 @@ class TcpSocketBase : public TcpSocket
     void SetUseEcn(TcpSocketState::UseEcn_t useEcn);
 
     /**
+     * @brief Process Accurate ECN feedback from the receiver
+     *
+     * @param segsAcked Number of segments acknowledged by the received ACK
+     * @param ace ACE field value from receiver
+     *
+     * @return Number of CE packets to be considered for congestion control
+     */
+    uint32_t ProcessAccEcn(uint32_t segsAcked, uint8_t ace);
+
+    /**
+     * @brief Set ACE field
+     *
+     * @param ace ACE field value to set
+     */
+    inline uint16_t SetAceFlags(uint16_t ace) const
+    {
+        uint16_t aceValue = static_cast<uint16_t>(ace & 0x7);
+        return (aceValue << 6);
+    }
+
+    /**
+     * @brief Get ACE field from flags
+     *
+     * @param flags TCP header flags
+     *
+     * @return ACE field value
+     */
+    inline uint8_t GetAceFlags(uint16_t flags) const
+    {
+        return ((flags >> 6) & 0x7);
+    }
+
+    /**
+     * @brief Encode ACE field for Accurate ECN
+     *
+     * @param rCep CE packet counter at receiver
+     *
+     * @return Encoded ACE field value
+     */
+    inline uint8_t EncodeAceFlag(uint32_t rCep) const
+    {
+        return rCep % 8;
+    }
+
+    /**
      * @brief Enable or disable pacing
      * @param pacing Boolean to enable or disable pacing
      */
@@ -861,7 +906,7 @@ class TcpSocketBase : public TcpSocket
      *
      * @param flags the packet's flags
      */
-    virtual void SendEmptyPacket(uint8_t flags);
+    virtual void SendEmptyPacket(uint16_t flags);
 
     /**
      * @brief Send reset and tear down this socket
@@ -1293,10 +1338,24 @@ class TcpSocketBase : public TcpSocket
 
 
     /**
-     * @brief Add private helper declaration for TARR experimental option
+     * @brief Add the TARR option to the header
+     *
+     * @param header TcpHeader where the option should be added to.
      */
-    void AddOptionTARR(TcpHeader& header);                // <— add
-    void ProcessOptionTarr(const Ptr<const TcpOption>);   // <— add
+    void AddOptionTARR(TcpHeader& header);
+
+    /**
+     * @brief Processing of TARR option at the receiving end
+     *
+     */
+    void ProcessOptionTarr(const Ptr<const TcpOption>);
+
+    /**
+     * @brief Method to update the Ack ratio requested - When Dynamic R is enabled
+     *
+     * @param ackTime Time, passing in the current ack arrival time so that the inter-ack gap can be computed without calling Simulator::Now()
+     */
+    void UpdateTarrRatio(Time ackTime);
 
 
     /**
@@ -1438,6 +1497,14 @@ class TcpSocketBase : public TcpSocket
     bool m_tarrRequestOnData{true};          //!< Option to include in data packets
     // uint8_t m_tarrMaxRequestRatio{16};    //!< Could be added later for more control over R (validation)
 
+    // Dynamic R fields
+    bool m_tarrDynamicR{false};             //!< Enable dynamic R selection
+    Time m_lastAckTime{Seconds(0)};         //!< Arrival Time for previous Ack for IAT measurement
+    double m_normGapEwma{0.0};              //!< EWMA of normalised inter-ack gap (raw gap / R)
+    double m_normGapBaseline{0.0};          //!< Baseline normalised gap established early in CA phase
+    bool m_baselineSet{false};              //!< Set to true when the baseline hase been set
+    double m_tarrRttThreshold{0.05};        //!< RTT threshold at which R is capped to 2, 50ms used as conservative bound
+    uint32_t m_tarrPrevCwnd{0};             //!< Previous cWnd value for trend measurement
 
 
     EventId m_sendPendingDataEvent{}; //!< micro-delay event to send pending data
