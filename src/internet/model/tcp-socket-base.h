@@ -1506,6 +1506,9 @@ class TcpSocketBase : public TcpSocket
     double m_tarrRttThreshold{0.05};        //!< RTT threshold at which R is capped to 2, 50ms used as conservative bound
     uint32_t m_tarrPrevCwnd{0};             //!< Previous cWnd value for trend measurement
 
+    // AccECN + TARR interaction (receiver side, Section 3.2 of draft-ietf-tcpm-ack-rate-request-11)
+    bool m_prevPacketWasCE{false};          //!< Whether the previous received packet carried a CE mark (for Change-Triggered ACK)
+    uint32_t m_ceSinceLastAck{0};           //!< CE-marked packets received since the last ACK was sent (for Increment-Triggered ACK)
 
     EventId m_sendPendingDataEvent{}; //!< micro-delay event to send pending data
 

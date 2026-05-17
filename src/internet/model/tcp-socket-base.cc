@@ -7,6 +7,8 @@
  * Author: Adrian Sai-wah Tam <adrian.sw.tam@gmail.com>
  */
 
+#include "ipv4-header.h"
+#include "tcp-socket-state.h"
 #include <cstdint>
 #define NS_LOG_APPEND_CONTEXT                                                                      \
     if (m_node)                                                                                    \
@@ -1287,7 +1289,10 @@ TcpSocketBase::ForwardUp(Ptr<Packet> packet,
         NS_LOG_DEBUG(TcpSocketState::EcnStateName[m_tcb->m_ecnState] << " -> ECN_CE_RCVD");
         m_tcb->m_ecnState = TcpSocketState::ECN_CE_RCVD;
         if (m_tcb->m_ecnMode == TcpSocketState::AccEcn)
-           m_tcb->m_rCep++;
+        {
+            m_tcb->m_rCep++;
+            m_ceSinceLastAck++; // Count CE marks since last ACK transmitted for TARR option
+        }
         else
            m_congestionControl->CwndEvent(m_tcb, TcpSocketState::CA_EVENT_ECN_IS_CE);
 
@@ -1297,6 +1302,8 @@ TcpSocketBase::ForwardUp(Ptr<Packet> packet,
     {
         m_congestionControl->CwndEvent(m_tcb, TcpSocketState::CA_EVENT_ECN_NO_CE);
     }
+
+    m_prevPacketWasCE = (header.GetEcn() == Ipv4Header::ECN_CE);
 
     DoForwardUp(packet, fromAddress, toAddress);
 }
@@ -4016,6 +4023,24 @@ TcpSocketBase::ReceivedData(Ptr<Packet> p, const TcpHeader& tcpHeader)
         ackThreshold = m_peerAckRatio;
     }
 
+    // Behavior with AccECN
+    if (m_tcb->m_ecnMode == TcpSocketState::AccEcn && m_tarrEnabled && m_peerTarrCapable)
+    {
+            bool ceTransition = (m_tcb->m_ecnState == TcpSocketState::ECN_CE_RCVD) && !m_prevPacketWasCE;
+            uint32_t n = (m_txBuffer->Size() > 0) ? 2 : 3;
+            if (ceTransition || m_ceSinceLastAck >= n)
+            {
+                m_delAckEvent.Cancel();
+                m_delAckCount = 0;
+                m_segCountForAck = 0;
+                m_ceSinceLastAck = 0;
+                SendEmptyPacket(TcpHeader::ACK | TcpHeader::ECE); // Emit ACK with ECN echo
+                m_tcb->m_ecnState = TcpSocketState::ECN_SENDING_ECE; // Update state
+                return;
+            }
+
+    }
+
     // Keep legacy counter for existing behavior/tracing, and TARR counter for explicit TARR logic.
     ++m_delAckCount;
     ++m_segCountForAck;
@@ -4025,6 +4050,7 @@ TcpSocketBase::ReceivedData(Ptr<Packet> p, const TcpHeader& tcpHeader)
         m_delAckEvent.Cancel();
         m_delAckCount = 0;
         m_segCountForAck = 0;
+        m_ceSinceLastAck = 0; // Reset counter - TARR drafts tracks CE count since last ack emitted
         m_congestionControl->CwndEvent(m_tcb, TcpSocketState::CA_EVENT_NON_DELAYED_ACK);
 
         if (m_tcb->m_ecnState == TcpSocketState::ECN_CE_RCVD ||
