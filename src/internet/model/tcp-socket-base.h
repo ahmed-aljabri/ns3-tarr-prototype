@@ -1501,10 +1501,12 @@ class TcpSocketBase : public TcpSocket
     bool m_tarrDynamicR{false};             //!< Enable dynamic R selection
     Time m_lastAckTime{Seconds(0)};         //!< Arrival Time for previous Ack for IAT measurement
     double m_normGapEwma{0.0};              //!< EWMA of normalised inter-ack gap (raw gap / R)
+    double m_prevNormGapEwma{0.0};          //!< EWMA value from previous call, for rate-of-change detection
     double m_normGapBaseline{0.0};          //!< Baseline normalised gap established early in CA phase
     bool m_baselineSet{false};              //!< Set to true when the baseline hase been set
     double m_tarrRttThreshold{0.05};        //!< RTT threshold at which R is capped to 2, 50ms used as conservative bound
     uint32_t m_tarrPrevCwnd{0};             //!< Previous cWnd value for trend measurement
+    uint32_t m_tarrCaRttCount{0};           //!< RTTs elapsed since entering CA, used for warmup
 
     // AccECN + TARR interaction (receiver side, Section 3.2 of draft-ietf-tcpm-ack-rate-request-11)
     bool m_prevPacketWasCE{false};          //!< Whether the previous received packet carried a CE mark (for Change-Triggered ACK)
