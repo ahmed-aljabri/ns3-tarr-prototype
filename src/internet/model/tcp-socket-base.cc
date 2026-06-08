@@ -5403,6 +5403,7 @@ RttHistory::RttHistory(const RttHistory& h)
 {
 }
 
+/* Dynamic TARR Mechanism (Dyn-R) */
 void
 TcpSocketBase::UpdateTarrRatio(Time ackTime)
 {
@@ -5410,17 +5411,14 @@ TcpSocketBase::UpdateTarrRatio(Time ackTime)
         return;
     }
 
-    // Implement draft recommendation to cap R to 2 during slow-start
-    if (m_tcb->m_cWnd < m_tcb->m_ssThresh) {
-        m_requestedAckRatio = std::min((uint8_t)2, m_requestedAckRatio);
-        m_baselineSet = false;
-        m_normGapEwma = 0.0;
-        m_lastAckTime = Seconds(0);
-        m_tarrCaRttCount = 0;
-        return;
-    }
+    // Loss recovery and the first post-recovery segment are handled in the ACK
+    // processing path upstream (R=1 on CA_LOSS entry R=2 on the first
+    // segment afterwards), so this method only adapts R during steady congestion
+    // avoidance. The draft recommends capping R at 2 in slow start; that is covered
+    // implicitly by the acksPerRtt < 3 floor below, which lowers R whenever the
+    // window is small without pinning it at 2 after a retransmission timeout
 
-    // Only measure IAT within a RTT ack batch - discard cross RTT measurements
+    // Measure the gap between successive ACKs
     if (m_lastAckTime.IsZero())
     {
         m_lastAckTime = ackTime;
@@ -5429,86 +5427,93 @@ TcpSocketBase::UpdateTarrRatio(Time ackTime)
     Time gap = ackTime - m_lastAckTime;
     m_lastAckTime = ackTime;
 
-    // Normalise inter-ack gap by R to remove effect of stretched acks on spacing
+    // A gap larger than the SRTT likely spans more than one window and is discarded
+    if (gap >= m_tcb->m_srtt)
+    {
+        return;
+    }
+
+    // Normalise by R so the spacing better reflects the reverse path
     double normGap = gap.GetSeconds() / m_requestedAckRatio;
 
-    // Collect EWMA samples until we have enough to set a reliable baseline
+    // Update the EWMA of the normalised gap
+    m_prevNormGapEwma = m_normGapEwma;
+    m_normGapEwma = (m_normGapEwma == 0.0)
+                  ? normGap
+                  : 0.125 * normGap + 0.875 * m_normGapEwma;
+
+    // Warm up for 30 ACKs so the EWMA converges before any decision is taken
     if (m_tarrCaRttCount < 30)
     {
         m_tarrCaRttCount++;
-        m_normGapEwma = (m_normGapEwma == 0.0) ? normGap : 0.125 * normGap + 0.875 * m_normGapEwma;
         return;
     }
 
-    // Warmup done - set baseline from the accumulated EWMA
+    // Freeze the baseline once, from the converged EWMA; all later comparisons are made relative to this value
     if (!m_baselineSet)
     {
-        m_normGapBaseline = (m_normGapEwma > 0.0) ? m_normGapEwma : normGap;
-        m_normGapEwma = m_normGapBaseline;
-        m_prevNormGapEwma = m_normGapBaseline;
+        m_normGapBaseline = m_normGapEwma;
         m_baselineSet = true;
+        m_tarrPrevCwnd = m_tcb->m_cWnd;
         return;
     }
 
-    // Update EWMA
-    m_prevNormGapEwma = m_normGapEwma;
-    m_normGapEwma = 0.125 * normGap + 0.875 * m_normGapEwma;
-
-    // Computer Acks per RTT
     uint32_t mss = m_tcb->m_segmentSize;
     uint32_t cwnd = m_tcb->m_cWnd;
+    uint32_t iw = m_tcb->m_initialCWnd * mss;
+
+    // Expected number of ACKs per window under the ratio currently in effect
     double acksPerRtt = (m_requestedAckRatio > 0)
-                        ? static_cast<double>(cwnd) / (m_requestedAckRatio * mss)
-                        : 1.0;
+                      ? static_cast<double>(cwnd) / (m_requestedAckRatio * mss)
+                      : 1.0;
 
-    // Level 2 - Cap R if RTT approaching the delayed-ack timer
-    // NOTE: disabled — SRTT conflates propagation and queuing delay; a windowed
-    // minRTT estimator (cf. BBR RTprop) is needed before this gate is meaningful.
-    // double srttSec = m_tcb->m_srtt.Get().GetSeconds();
-    // if (srttSec >= m_tarrRttThreshold) { m_requestedAckRatio = 1; return; }
-    // if (srttSec >= 0.8 * m_tarrRttThreshold) { m_requestedAckRatio = min(2, R); return; }
-
-    // Level 3 - Dynamic R Selection
-    bool iatActivelyRising = m_normGapEwma > m_prevNormGapEwma * 1.1;
-    bool iatDecreasing = m_normGapEwma < m_normGapBaseline * 0.9;
-    bool cwndGrowing = cwnd > m_tarrPrevCwnd;
-    bool cwndFalling = cwnd < m_tarrPrevCwnd;
+    // Compares the EWMA against the frozen baseline rather than the previous sample, so
+    // R reacts to a sustained drift from the learned norm instead of to per-ACK noise
+    bool iatRising = (m_normGapEwma > m_normGapBaseline * 1.25);
+    bool iatFalling = (m_normGapEwma < m_normGapBaseline * 0.75);
+    bool cwndStable = (cwnd == m_tarrPrevCwnd);
     m_tarrPrevCwnd = cwnd;
 
+    // Take at most one decision per 30 ACKs,
+    // same variable that set the baseline is reused to pace R changes (once per 30 ACKs)
+    m_tarrCaRttCount++;
+    if (m_tarrCaRttCount % 30 != 0)
+    {
+        return;
+    }
+
+    // The branches below are evaluated in priority order; the first match wins
     if (acksPerRtt < 3.0)
     {
-        // Make sure there are at least 4 acks per RTT, otherwise reduce R
+        // Safety floor: too few ACKs per window to sustain healthy feedback
         m_requestedAckRatio = std::max((uint8_t)1, (uint8_t)(m_requestedAckRatio - 1));
     }
-    else
+    else if (iatRising && cwnd > iw)
     {
-        if (iatActivelyRising)
-        {
-            if ((!cwndFalling && !cwndGrowing) && (cwnd > m_tcb->m_initialCWnd * mss))
-            {
-                // Reverse path actively worsening while forward is healthy — relax ACK demand
-                m_requestedAckRatio = std::min((uint8_t)11, (uint8_t)(m_requestedAckRatio + 1));
-            }
-            else if (!cwndGrowing && (cwnd < m_tcb->m_initialCWnd * mss))
-            {
-                // IAT rising but forward path below IW and not recovering — reduce R
-                m_requestedAckRatio = std::max((uint8_t)1, (uint8_t)(m_requestedAckRatio - 1));
-            }
-            // else: hold R
-        }
+        // Increment R, sufficient feedback and healthy window
+        m_requestedAckRatio = std::min((uint8_t)11, (uint8_t)(m_requestedAckRatio + 1));
     }
+    else if (iatFalling && acksPerRtt > 5.0)
+    {
+        // Lower R
+        m_requestedAckRatio = std::max((uint8_t)1, (uint8_t)(m_requestedAckRatio - 1));
+    }
+    else if (acksPerRtt > 10.0 && cwnd > iw && m_tcb->m_srtt.Get().GetSeconds() < 0.15)
+    {
+        // Bound R increments to SRTTs under 150 ms as that can be detrimental to throughput
+        m_requestedAckRatio = std::min((uint8_t)11, (uint8_t)(m_requestedAckRatio + 1));
+    }
+    // else hold R unchanged.
 
     NS_LOG_DEBUG("DynR t=" << ackTime.GetSeconds()
                  << " R=" << static_cast<uint32_t>(m_requestedAckRatio)
+                 << " cwnd=" << cwnd
                  << " ewma=" << m_normGapEwma
                  << " prev=" << m_prevNormGapEwma
                  << " base=" << m_normGapBaseline
                  << " acks/rtt=" << acksPerRtt
-                 << " cwnd=" << cwnd
-                 << " iatRising=" << iatActivelyRising
-                 << " iatDn=" << iatDecreasing
-                 << " cwndGrow=" << cwndGrowing
-                 << " cwndFall=" << cwndFalling);
+                 << " iatRising=" << iatRising
+                 << " cwndStable=" << cwndStable);
 
 } // end UpdateTarrRatio
 
